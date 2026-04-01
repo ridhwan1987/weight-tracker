@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weight Loss Journey</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #f8fafc;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.9rem;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: #1e293b;
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 20px;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .stats-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 20px;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .stat {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 14px 20px;
+    text-align: center;
+    flex: 1;
+    min-width: 140px;
+  }
+  .stat-value {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #38bdf8;
+  }
+  .stat-value.green { color: #4ade80; }
+  .stat-value.orange { color: #fb923c; }
+  .stat-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  canvas { width: 100% !important; }
+  .form-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 130px;
+  }
+  label {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  input[type="date"], input[type="number"] {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #f1f5f9;
+    padding: 10px 12px;
+    font-size: 0.95rem;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input:focus { border-color: #38bdf8; }
+  input[type="number"]::-webkit-inner-spin-button { opacity: 1; }
+  button {
+    background: #38bdf8;
+    color: #0f172a;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 22px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+    align-self: flex-end;
+  }
+  button:hover { background: #7dd3fc; }
+  .entry-list {
+    margin-top: 16px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+  th {
+    color: #64748b;
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid #1e293b;
+    font-weight: 500;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+  }
+  td {
+    padding: 7px 8px;
+    border-bottom: 1px solid #1e293b;
+    color: #cbd5e1;
+  }
+  td.weight-cell { font-weight: 600; color: #f1f5f9; }
+  td.delta-cell { color: #4ade80; }
+  td.delta-cell.gain { color: #f87171; }
+  .del-btn {
+    background: transparent;
+    color: #475569;
+    padding: 2px 8px;
+    font-size: 0.8rem;
+    font-weight: 400;
+    border: 1px solid #334155;
+  }
+  .del-btn:hover { background: #7f1d1d; color: #fca5a5; border-color: #7f1d1d; }
+  .section-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 14px;
+  }
+  .target-line {
+    font-size: 0.8rem;
+    color: #94a3b8;
+    text-align: center;
+    margin-top: 8px;
+  }
+  .target-line span { color: #4ade80; font-weight: 600; }
+  .sync-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .sync-input {
+    flex: 1;
+    min-width: 200px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #f1f5f9;
+    padding: 9px 12px;
+    font-size: 0.88rem;
+    outline: none;
+  }
+  .sync-input:focus { border-color: #38bdf8; }
+  .sync-btn {
+    background: #334155;
+    color: #e2e8f0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 9px 16px;
+  }
+  .sync-btn:hover { background: #475569; }
+  .sync-btn.primary { background: #38bdf8; color: #0f172a; }
+  .sync-btn.primary:hover { background: #7dd3fc; }
+  .sync-msg {
+    font-size: 0.8rem;
+    margin-top: 8px;
+    min-height: 18px;
+    color: #94a3b8;
+  }
+  .sync-msg.ok { color: #4ade80; }
+  .sync-msg.err { color: #f87171; }
+  .sync-indicator {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #334155;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .sync-indicator.on { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+  .bmi-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  .bmi-obese { background: rgba(248,113,113,0.2); color: #f87171; }
+  .bmi-overweight { background: rgba(251,191,36,0.2); color: #fbbf24; }
+  .bmi-normal { background: rgba(74,222,128,0.2); color: #4ade80; }
+  .bmi-underweight { background: rgba(148,163,184,0.2); color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<h1>Weight Loss Journey</h1>
+<p class="subtitle">Track your progress, one weigh-in at a time</p>
+
+<div class="stats-row">
+  <div class="stat">
+    <div class="stat-value" id="stat-current">—</div>
+    <div class="stat-label">Current (kg)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value green" id="stat-lost">—</div>
+    <div class="stat-label">Total Lost (kg)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value orange" id="stat-to-goal">—</div>
+    <div class="stat-label">To Goal (kg)</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value" id="stat-days">—</div>
+    <div class="stat-label">Days Tracked</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-title">Progress Chart</div>
+  <canvas id="chart" height="260"></canvas>
+  <p class="target-line">Baseline: 87.4 kg &nbsp;|&nbsp; Goal: <span>75.0 kg</span> &nbsp;|&nbsp; Sub-80 Target: <span>79.9 kg</span></p>
+</div>
+
+<div class="stats-row" style="margin-bottom:12px;">
+  <div class="stat">
+    <div class="stat-value" id="stat-bmi">—</div>
+    <div class="stat-label">Current BMI <span id="stat-bmi-badge"></span></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-title">BMI Chart <span style="color:#475569;font-weight:400;font-size:0.8rem;margin-left:6px;">Height: 165 cm</span></div>
+  <canvas id="bmi-chart" height="220"></canvas>
+  <p class="target-line">Healthy BMI: <span>18.5 – 24.9</span> &nbsp;|&nbsp; Overweight: 25.0 – 29.9 &nbsp;|&nbsp; Obese: ≥ 30.0 &nbsp;|&nbsp; Sub-80 kg → BMI <span>29.4</span></p>
+</div>
+
+<div class="card">
+  <div class="section-title"><span class="sync-indicator" id="sync-dot"></span>Cloud Sync</div>
+  <div class="sync-row">
+    <input class="sync-input" id="fb-url" type="url" placeholder="https://your-project-default-rtdb.firebaseio.com" />
+    <button class="sync-btn primary" onclick="saveAndPush()">Save & Push</button>
+    <button class="sync-btn" onclick="pullFromFirebase()">Pull</button>
+  </div>
+  <p style="font-size:0.75rem;color:#475569;margin-bottom:6px;">
+    Get a free URL: <a href="https://console.firebase.google.com" target="_blank" style="color:#38bdf8;">console.firebase.google.com</a>
+    → Create project → Realtime Database → Start in test mode → copy the URL.
+  </p>
+  <div class="sync-msg" id="sync-msg"></div>
+</div>
+
+<div class="card">
+  <div class="section-title">Add New Entry</div>
+  <div class="form-row">
+    <div class="form-group">
+      <label>Date</label>
+      <input type="date" id="inp-date">
+    </div>
+    <div class="form-group">
+      <label>Weight (kg)</label>
+      <input type="number" id="inp-weight" step="0.1" min="40" max="200" placeholder="e.g. 82.3">
+    </div>
+    <button onclick="addEntry()">Add</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-title">All Entries</div>
+  <div class="entry-list">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Weight (kg)</th>
+          <th>BMI</th>
+          <th>Change</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="entry-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+Chart.register(ChartDataLabels);
+
+const STORAGE_KEY = 'weight_journey_v2';
+const BASELINE = 87.4;
+const GOAL = 75.0;
+const HEIGHT_M = 1.65;
+
+function calcBMI(weight) { return weight / (HEIGHT_M * HEIGHT_M); }
+function bmiCategory(bmi) {
+  if (bmi < 18.5) return { label: 'Underweight', cls: 'bmi-underweight' };
+  if (bmi < 25.0) return { label: 'Normal', cls: 'bmi-normal' };
+  if (bmi < 30.0) return { label: 'Overweight', cls: 'bmi-overweight' };
+  return { label: 'Obese', cls: 'bmi-obese' };
+}
+
+const INITIAL_DATA = [
+  { date: '2026-02-11', weight: 87.4 },
+  { date: '2026-02-24', weight: 86.4 },
+  { date: '2026-02-28', weight: 85.5 },
+  { date: '2026-03-10', weight: 84.4 },
+  { date: '2026-03-16', weight: 81.5 },
+  { date: '2026-03-17', weight: 81.9 },
+  { date: '2026-03-23', weight: 83.2 },
+  { date: '2026-03-24', weight: 82.7 },
+  { date: '2026-03-29', weight: 82.6 },
+  { date: '2026-03-31', weight: 81.5 },
+  { date: '2026-04-01', weight: 80.7 },
+];
+
+const FB_URL_KEY = 'wt_firebase_url';
+
+function getFirebaseUrl() {
+  return (localStorage.getItem(FB_URL_KEY) || '').trim();
+}
+
+function setSyncMsg(msg, type = '') {
+  const el = document.getElementById('sync-msg');
+  el.textContent = msg;
+  el.className = 'sync-msg' + (type ? ' ' + type : '');
+}
+
+function setSyncDot(on) {
+  document.getElementById('sync-dot').className = 'sync-indicator' + (on ? ' on' : '');
+}
+
+async function pushToFirebase(data) {
+  const url = getFirebaseUrl();
+  if (!url) return false;
+  try {
+    const res = await fetch(`${url}/weight_tracker.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return res.ok;
+  } catch(e) { return false; }
+}
+
+async function pullFromFirebase() {
+  const url = getFirebaseUrl();
+  if (!url) { setSyncMsg('No Firebase URL saved yet.', 'err'); return; }
+  setSyncMsg('Pulling…');
+  try {
+    const res = await fetch(`${url}/weight_tracker.json`);
+    if (!res.ok) throw new Error();
+    const remote = await res.json();
+    if (!Array.isArray(remote) || !remote.length) { setSyncMsg('No data found in cloud.', 'err'); return; }
+    save(remote);
+    render();
+    setSyncMsg('Pulled from cloud! Data is up to date.', 'ok');
+    setSyncDot(true);
+  } catch(e) {
+    setSyncMsg('Pull failed — check URL and Firebase rules (allow read/write).', 'err');
+    setSyncDot(false);
+  }
+}
+
+async function saveAndPush() {
+  const urlInput = document.getElementById('fb-url').value.trim();
+  if (!urlInput) { setSyncMsg('Please enter your Firebase URL.', 'err'); return; }
+  localStorage.setItem(FB_URL_KEY, urlInput);
+  setSyncMsg('Pushing to cloud…');
+  const ok = await pushToFirebase(load());
+  if (ok) {
+    setSyncMsg('Saved! Data pushed to cloud. Use the same URL on any device and click Pull.', 'ok');
+    setSyncDot(true);
+  } else {
+    setSyncMsg('Push failed — check the URL and make sure Firebase rules allow read/write.', 'err');
+    setSyncDot(false);
+  }
+}
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch(e) {}
+  return INITIAL_DATA.map(e => ({...e}));
+}
+
+function save(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function sortedData() {
+  const data = load();
+  return data.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function fmt(dateStr) {
+  const [y, m, d] = dateStr.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${parseInt(d)} ${months[parseInt(m)-1]}`;
+}
+
+let chartInstance = null;
+let bmiChartInstance = null;
+
+function renderChart(data) {
+  const ctx = document.getElementById('chart').getContext('2d');
+  const labels = data.map(e => e.date);
+  const weights = data.map(e => e.weight);
+  const minW = Math.min(...weights, GOAL) - 1;
+  const maxW = Math.max(...weights) + 1;
+
+  if (chartInstance) chartInstance.destroy();
+
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Weight (kg)',
+          data: weights,
+          borderColor: '#38bdf8',
+          backgroundColor: 'rgba(56,189,248,0.10)',
+          borderWidth: 2.5,
+          pointBackgroundColor: weights.map(w => w <= 80 ? '#4ade80' : '#38bdf8'),
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          tension: 0.3,
+          fill: true,
+          datalabels: {
+            display: true,
+            align: 'top',
+            anchor: 'end',
+            offset: 2,
+            color: ctx => ctx.dataset.pointBackgroundColor[ctx.dataIndex],
+            font: { size: 11, weight: '600' },
+            formatter: v => v.toFixed(1),
+          },
+        },
+        {
+          label: 'Baseline (87.4)',
+          data: labels.map(() => BASELINE),
+          borderColor: 'rgba(248,113,113,0.4)',
+          borderWidth: 1.5,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false,
+          datalabels: { display: false },
+        },
+        {
+          label: 'Goal (75.0)',
+          data: labels.map(() => GOAL),
+          borderColor: 'rgba(74,222,128,0.4)',
+          borderWidth: 1.5,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false,
+          datalabels: { display: false },
+        },
+        {
+          label: 'Sub-80 Target',
+          data: labels.map(() => 79.9),
+          borderColor: 'rgba(251,191,36,0.35)',
+          borderWidth: 1,
+          borderDash: [3, 5],
+          pointRadius: 0,
+          fill: false,
+          datalabels: { display: false },
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: '#94a3b8', font: { size: 11 }, boxWidth: 18 }
+        },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#f1f5f9',
+          bodyColor: '#94a3b8',
+          borderColor: '#334155',
+          borderWidth: 1,
+          callbacks: {
+            title: ctx => fmt(ctx[0].label),
+            label: ctx => ctx.dataset.label === 'Weight (kg)'
+              ? ` ${ctx.parsed.y.toFixed(1)} kg`
+              : null,
+            afterBody: ctx => {
+              const w = ctx[0].parsed.y;
+              const lost = (BASELINE - w).toFixed(1);
+              const toGoal = (w - GOAL).toFixed(1);
+              return [` Lost from baseline: ${lost} kg`, ` To goal: ${toGoal} kg`];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#64748b',
+            font: { size: 11 },
+            callback: (val, i) => fmt(labels[i]),
+            maxRotation: 45,
+          },
+          grid: { color: 'rgba(255,255,255,0.04)' }
+        },
+        y: {
+          min: Math.floor(minW),
+          max: Math.ceil(maxW),
+          ticks: { color: '#64748b', font: { size: 11 }, callback: v => v + ' kg' },
+          grid: { color: 'rgba(255,255,255,0.04)' }
+        }
+      }
+    }
+  });
+}
+
+function renderBmiChart(data) {
+  const ctx = document.getElementById('bmi-chart').getContext('2d');
+  const labels = data.map(e => e.date);
+  const bmis = data.map(e => parseFloat(calcBMI(e.weight).toFixed(2)));
+  const minB = Math.min(...bmis, 18) - 0.5;
+  const maxB = Math.max(...bmis, 30) + 0.5;
+
+  if (bmiChartInstance) bmiChartInstance.destroy();
+
+  bmiChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'BMI',
+          data: bmis,
+          borderColor: '#a78bfa',
+          backgroundColor: 'rgba(167,139,250,0.10)',
+          borderWidth: 2.5,
+          pointBackgroundColor: bmis.map(b => b < 25 ? '#4ade80' : b < 30 ? '#fbbf24' : '#f87171'),
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          tension: 0.3,
+          fill: true,
+          datalabels: { display: false },
+        },
+        {
+          label: 'Healthy upper (24.9)',
+          data: labels.map(() => 24.9),
+          borderColor: 'rgba(74,222,128,0.5)',
+          borderWidth: 1.5,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false,
+          datalabels: { display: false },
+        },
+        {
+          label: 'Overweight upper (29.9)',
+          data: labels.map(() => 29.9),
+          borderColor: 'rgba(248,113,113,0.45)',
+          borderWidth: 1.5,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false,
+          datalabels: { display: false },
+        },
+        {
+          label: 'Sub-80 kg target (29.4)',
+          data: labels.map(() => parseFloat(calcBMI(79.9).toFixed(2))),
+          borderColor: 'rgba(251,191,36,0.4)',
+          borderWidth: 1,
+          borderDash: [3, 5],
+          pointRadius: 0,
+          fill: false,
+          datalabels: { display: false },
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: '#94a3b8', font: { size: 11 }, boxWidth: 18 }
+        },
+        tooltip: {
+          backgroundColor: '#1e293b',
+          titleColor: '#f1f5f9',
+          bodyColor: '#94a3b8',
+          borderColor: '#334155',
+          borderWidth: 1,
+          callbacks: {
+            title: ctx => fmt(ctx[0].label),
+            label: ctx => ctx.dataset.label === 'BMI'
+              ? ` BMI: ${ctx.parsed.y.toFixed(2)} — ${bmiCategory(ctx.parsed.y).label}`
+              : null,
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#64748b',
+            font: { size: 11 },
+            callback: (val, i) => fmt(labels[i]),
+            maxRotation: 45,
+          },
+          grid: { color: 'rgba(255,255,255,0.04)' }
+        },
+        y: {
+          min: Math.floor(minB),
+          max: Math.ceil(maxB),
+          ticks: { color: '#64748b', font: { size: 11 }, callback: v => v.toFixed(1) },
+          grid: { color: 'rgba(255,255,255,0.04)' }
+        }
+      }
+    }
+  });
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('entry-tbody');
+  tbody.innerHTML = '';
+  [...data].reverse().forEach((e, ri) => {
+    const i = data.length - 1 - ri;
+    const prev = i > 0 ? data[i-1].weight : null;
+    const delta = prev !== null ? (e.weight - prev) : null;
+    const deltaStr = delta !== null
+      ? (delta > 0 ? '+' : '') + delta.toFixed(1) + ' kg'
+      : '—';
+    const isGain = delta !== null && delta > 0;
+    const bmi = calcBMI(e.weight);
+    const cat = bmiCategory(bmi);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${fmt(e.date)}</td>
+      <td class="weight-cell">${e.weight.toFixed(1)}</td>
+      <td><span class="bmi-badge ${cat.cls}">${bmi.toFixed(1)}</span></td>
+      <td class="delta-cell ${isGain ? 'gain' : ''}">${deltaStr}</td>
+      <td><button class="del-btn" onclick="deleteEntry('${e.date}')">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderStats(data) {
+  if (!data.length) return;
+  const latest = data[data.length - 1].weight;
+  const lost = (BASELINE - latest).toFixed(1);
+  const toGoal = (latest - GOAL).toFixed(1);
+  const first = new Date(data[0].date);
+  const last = new Date(data[data.length - 1].date);
+  const days = Math.round((last - first) / 86400000) + 1;
+  const bmi = calcBMI(latest);
+  const cat = bmiCategory(bmi);
+  document.getElementById('stat-current').textContent = latest.toFixed(1);
+  document.getElementById('stat-lost').textContent = lost > 0 ? lost : '0.0';
+  document.getElementById('stat-to-goal').textContent = toGoal > 0 ? toGoal : '0.0';
+  document.getElementById('stat-days').textContent = days;
+  document.getElementById('stat-bmi').textContent = bmi.toFixed(1);
+  document.getElementById('stat-bmi-badge').innerHTML = `<span class="bmi-badge ${cat.cls}">${cat.label}</span>`;
+}
+
+function render() {
+  const data = sortedData();
+  renderChart(data);
+  renderBmiChart(data);
+  renderTable(data);
+  renderStats(data);
+}
+
+function addEntry() {
+  const dateVal = document.getElementById('inp-date').value;
+  const weightVal = parseFloat(document.getElementById('inp-weight').value);
+  if (!dateVal || isNaN(weightVal) || weightVal < 40 || weightVal > 200) {
+    alert('Please enter a valid date and weight (40–200 kg).');
+    return;
+  }
+  const data = load();
+  const existing = data.findIndex(e => e.date === dateVal);
+  if (existing >= 0) {
+    if (!confirm(`Entry for ${fmt(dateVal)} already exists (${data[existing].weight} kg). Replace it?`)) return;
+    data[existing].weight = weightVal;
+  } else {
+    data.push({ date: dateVal, weight: weightVal });
+  }
+  save(data);
+  document.getElementById('inp-weight').value = '';
+  render();
+  pushToFirebase(data).then(ok => {
+    if (getFirebaseUrl()) { setSyncMsg(ok ? 'Synced to cloud.' : 'Local save OK, cloud sync failed.', ok ? 'ok' : 'err'); setSyncDot(ok); }
+  });
+}
+
+function deleteEntry(date) {
+  if (!confirm(`Delete entry for ${fmt(date)}?`)) return;
+  const data = load().filter(e => e.date !== date);
+  save(data);
+  render();
+  pushToFirebase(data).then(ok => {
+    if (getFirebaseUrl()) { setSyncMsg(ok ? 'Synced to cloud.' : 'Local save OK, cloud sync failed.', ok ? 'ok' : 'err'); setSyncDot(ok); }
+  });
+}
+
+// Set today's date as default
+document.getElementById('inp-date').value = new Date().toISOString().split('T')[0];
+
+// Pre-fill saved Firebase URL
+const savedUrl = getFirebaseUrl();
+if (savedUrl) { document.getElementById('fb-url').value = savedUrl; setSyncDot(true); }
+
+render();
+</script>
+</body>
+</html>
