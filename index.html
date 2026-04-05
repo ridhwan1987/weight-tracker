@@ -460,7 +460,7 @@ function renderChart(data) {
   const ctx = document.getElementById('chart').getContext('2d');
   const labels = data.map(e => e.date);
   const weights = data.map(e => e.weight);
-  const minW = Math.min(...weights, GOAL) - 1;
+  const minW = Math.min(...weights) - 1.5;
   const maxW = Math.max(...weights) + 1;
 
   const trendData = linearRegression(weights);
