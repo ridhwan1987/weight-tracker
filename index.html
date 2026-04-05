@@ -256,7 +256,7 @@
 
 <div class="card">
   <div class="section-title">Progress Chart</div>
-  <canvas id="chart" height="420"></canvas>
+  <canvas id="chart" height="260"></canvas>
   <p class="target-line">Baseline: 87.4 kg &nbsp;|&nbsp; Goal: <span>75.0 kg</span> &nbsp;|&nbsp; Sub-80 Target: <span>79.9 kg</span></p>
 </div>
 
@@ -276,14 +276,10 @@
 <div class="card">
   <div class="section-title"><span class="sync-indicator" id="sync-dot"></span>Cloud Sync</div>
   <div class="sync-row">
-    <input class="sync-input" id="fb-url" type="url" placeholder="https://your-project-default-rtdb.firebaseio.com" />
-    <button class="sync-btn primary" onclick="saveAndPush()">Save & Push</button>
+    <button class="sync-btn primary" onclick="pushData()">Push</button>
     <button class="sync-btn" onclick="pullFromFirebase()">Pull</button>
   </div>
-  <p style="font-size:0.75rem;color:#475569;margin-bottom:6px;">
-    Get a free URL: <a href="https://console.firebase.google.com" target="_blank" style="color:#38bdf8;">console.firebase.google.com</a>
-    → Create project → Realtime Database → Start in test mode → copy the URL.
-  </p>
+  <p style="font-size:0.75rem;color:#475569;margin-bottom:6px;">On a new device, just click <strong style="color:#94a3b8;">Pull</strong> to load your latest data.</p>
   <div class="sync-msg" id="sync-msg"></div>
 </div>
 
@@ -327,6 +323,7 @@ const STORAGE_KEY = 'weight_journey_v2';
 const BASELINE = 87.4;
 const GOAL = 75.0;
 const HEIGHT_M = 1.65;
+const HARDCODED_FB_URL = 'https://aqilfuggler-default-rtdb.asia-southeast1.firebasedatabase.app/';
 
 function calcBMI(weight) { return weight / (HEIGHT_M * HEIGHT_M); }
 function bmiCategory(bmi) {
@@ -353,7 +350,7 @@ const INITIAL_DATA = [
 const FB_URL_KEY = 'wt_firebase_url';
 
 function getFirebaseUrl() {
-  return (localStorage.getItem(FB_URL_KEY) || '').trim();
+  return HARDCODED_FB_URL || (localStorage.getItem(FB_URL_KEY) || '').trim();
 }
 
 function setSyncMsg(msg, type = '') {
@@ -398,17 +395,14 @@ async function pullFromFirebase() {
   }
 }
 
-async function saveAndPush() {
-  const urlInput = document.getElementById('fb-url').value.trim();
-  if (!urlInput) { setSyncMsg('Please enter your Firebase URL.', 'err'); return; }
-  localStorage.setItem(FB_URL_KEY, urlInput);
+async function pushData() {
   setSyncMsg('Pushing to cloud…');
   const ok = await pushToFirebase(load());
   if (ok) {
-    setSyncMsg('Saved! Data pushed to cloud. Use the same URL on any device and click Pull.', 'ok');
+    setSyncMsg('Data pushed to cloud.', 'ok');
     setSyncDot(true);
   } else {
-    setSyncMsg('Push failed — check the URL and make sure Firebase rules allow read/write.', 'err');
+    setSyncMsg('Push failed — check Firebase rules allow read/write.', 'err');
     setSyncDot(false);
   }
 }
@@ -439,73 +433,133 @@ function fmt(dateStr) {
 let chartInstance = null;
 let bmiChartInstance = null;
 
+function linearRegression(weights) {
+  const n = weights.length;
+  const sumX = (n * (n - 1)) / 2;
+  const sumX2 = (n * (n - 1) * (2 * n - 1)) / 6;
+  const sumY = weights.reduce((a, b) => a + b, 0);
+  const sumXY = weights.reduce((s, y, i) => s + i * y, 0);
+  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+  return weights.map((_, i) => parseFloat((slope * i + intercept).toFixed(2)));
+}
+
+function getSupportResistance(weights) {
+  const resistances = [], supports = [];
+  for (let i = 1; i < weights.length - 1; i++) {
+    if (weights[i] > weights[i-1] && weights[i] > weights[i+1]) resistances.push(weights[i]);
+    if (weights[i] < weights[i-1] && weights[i] < weights[i+1]) supports.push(weights[i]);
+  }
+  return {
+    resistance: resistances.length ? resistances[resistances.length - 1] : null,
+    support: supports.length ? supports[supports.length - 1] : null,
+  };
+}
+
 function renderChart(data) {
   const ctx = document.getElementById('chart').getContext('2d');
   const labels = data.map(e => e.date);
   const weights = data.map(e => e.weight);
-  const minW = Math.min(...weights) - 1;
+  const minW = Math.min(...weights, GOAL) - 1;
   const maxW = Math.max(...weights) + 1;
+
+  const trendData = linearRegression(weights);
+  const { resistance, support } = getSupportResistance(weights);
 
   if (chartInstance) chartInstance.destroy();
 
+  const datasets = [
+    {
+      label: 'Weight (kg)',
+      data: weights,
+      borderColor: '#38bdf8',
+      backgroundColor: 'rgba(56,189,248,0.10)',
+      borderWidth: 2.5,
+      pointBackgroundColor: weights.map(w => w <= 80 ? '#4ade80' : '#38bdf8'),
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      tension: 0.3,
+      fill: true,
+      datalabels: {
+        display: true,
+        align: 'top',
+        anchor: 'end',
+        offset: 2,
+        color: ctx => ctx.dataset.pointBackgroundColor[ctx.dataIndex],
+        font: { size: 11, weight: '600' },
+        formatter: v => v.toFixed(1),
+      },
+    },
+    {
+      label: 'Trendline',
+      data: trendData,
+      borderColor: 'rgba(167,139,250,0.75)',
+      borderWidth: 1.5,
+      borderDash: [5, 3],
+      pointRadius: 0,
+      fill: false,
+      tension: 0,
+      datalabels: { display: false },
+    },
+    {
+      label: 'Baseline (87.4)',
+      data: labels.map(() => BASELINE),
+      borderColor: 'rgba(248,113,113,0.4)',
+      borderWidth: 1.5,
+      borderDash: [6, 4],
+      pointRadius: 0,
+      fill: false,
+      datalabels: { display: false },
+    },
+    {
+      label: 'Goal (75.0)',
+      data: labels.map(() => GOAL),
+      borderColor: 'rgba(74,222,128,0.4)',
+      borderWidth: 1.5,
+      borderDash: [6, 4],
+      pointRadius: 0,
+      fill: false,
+      datalabels: { display: false },
+    },
+    {
+      label: 'Sub-80 Target',
+      data: labels.map(() => 79.9),
+      borderColor: 'rgba(251,191,36,0.35)',
+      borderWidth: 1,
+      borderDash: [3, 5],
+      pointRadius: 0,
+      fill: false,
+      datalabels: { display: false },
+    },
+  ];
+
+  if (resistance !== null) datasets.push({
+    label: `Resistance (${resistance.toFixed(1)})`,
+    data: labels.map(() => resistance),
+    borderColor: 'rgba(248,113,113,0.65)',
+    borderWidth: 1.5,
+    borderDash: [2, 6],
+    pointRadius: 0,
+    fill: false,
+    tension: 0,
+    datalabels: { display: false },
+  });
+
+  if (support !== null) datasets.push({
+    label: `Support (${support.toFixed(1)})`,
+    data: labels.map(() => support),
+    borderColor: 'rgba(74,222,128,0.65)',
+    borderWidth: 1.5,
+    borderDash: [2, 6],
+    pointRadius: 0,
+    fill: false,
+    tension: 0,
+    datalabels: { display: false },
+  });
+
   chartInstance = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label: 'Weight (kg)',
-          data: weights,
-          borderColor: '#38bdf8',
-          backgroundColor: 'rgba(56,189,248,0.10)',
-          borderWidth: 2.5,
-          pointBackgroundColor: weights.map(w => w <= 80 ? '#4ade80' : '#38bdf8'),
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          tension: 0.3,
-          fill: true,
-          datalabels: {
-            display: true,
-            align: 'top',
-            anchor: 'end',
-            offset: 2,
-            color: ctx => ctx.dataset.pointBackgroundColor[ctx.dataIndex],
-            font: { size: 11, weight: '600' },
-            formatter: v => v.toFixed(1),
-          },
-        },
-        {
-          label: 'Baseline (87.4)',
-          data: labels.map(() => BASELINE),
-          borderColor: 'rgba(248,113,113,0.4)',
-          borderWidth: 1.5,
-          borderDash: [6, 4],
-          pointRadius: 0,
-          fill: false,
-          datalabels: { display: false },
-        },
-        {
-          label: 'Goal (75.0)',
-          data: labels.map(() => GOAL),
-          borderColor: 'rgba(74,222,128,0.4)',
-          borderWidth: 1.5,
-          borderDash: [6, 4],
-          pointRadius: 0,
-          fill: false,
-          datalabels: { display: false },
-        },
-        {
-          label: 'Sub-80 Target',
-          data: labels.map(() => 79.9),
-          borderColor: 'rgba(251,191,36,0.35)',
-          borderWidth: 1,
-          borderDash: [3, 5],
-          pointRadius: 0,
-          fill: false,
-          datalabels: { display: false },
-        },
-      ]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
@@ -742,9 +796,8 @@ function deleteEntry(date) {
 // Set today's date as default
 document.getElementById('inp-date').value = new Date().toISOString().split('T')[0];
 
-// Pre-fill saved Firebase URL
-const savedUrl = getFirebaseUrl();
-if (savedUrl) { document.getElementById('fb-url').value = savedUrl; setSyncDot(true); }
+// Firebase URL is hardcoded — always show green dot
+setSyncDot(true);
 
 render();
 </script>
