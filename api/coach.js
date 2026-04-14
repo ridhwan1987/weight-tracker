@@ -1,7 +1,45 @@
-﻿module.exports = async (req, res) => {
+﻿const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+const RETRYABLE_STATUS = new Set([429, 500, 503]);
+
+async function callGemini(apiKey, parts) {
+  let lastError = 'Gemini request failed.';
+
+  for (const model of MODELS) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts }],
+          generationConfig: { temperature: 0.9, topP: 0.95, maxOutputTokens: 1400 }
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok) {
+        const content = (((payload || {}).candidates || [])[0] || {}).content;
+        const reply = content && Array.isArray(content.parts)
+          ? content.parts.filter(part => typeof part.text === 'string').map(part => part.text).join('\n').trim()
+          : '';
+        if (reply) return reply;
+        lastError = 'No coach reply returned.';
+        break;
+      }
+
+      lastError = payload && payload.error && payload.error.message ? payload.error.message : `Gemini request failed on ${model}.`;
+      if (!RETRYABLE_STATUS.has(response.status) || attempt === 1) break;
+      await new Promise(resolve => setTimeout(resolve, 1200));
+    }
+  }
+
+  throw new Error(lastError);
+}
+
+module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed.' });
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'Missing GEMINI_API_KEY environment variable.' });
+
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
     const message = typeof body.message === 'string' ? body.message.trim() : '';
@@ -66,17 +104,7 @@
       }
     }
 
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { temperature: 0.9, topP: 0.95, maxOutputTokens: 1400 } })
-    });
-    const out = await r.json();
-    if (!r.ok) return res.status(500).json({ error: out && out.error && out.error.message ? out.error.message : 'Gemini request failed.' });
-    const text = (((out || {}).candidates || [])[0] || {}).content;
-    const reply = text && Array.isArray(text.parts) ? text.parts.filter(p => typeof p.text === 'string').map(p => p.text).join('\n').trim() : '';
-    if (!reply) return res.status(500).json({ error: 'No coach reply returned.' });
-
+    const reply = await callGemini(apiKey, parts);
     const summarySuggestion = [
       tracker.latestWeight ? `Latest weight ${tracker.latestWeight} kg on ${tracker.latestDate}.` : '',
       message ? `Current focus: ${message.slice(0, 180)}` : '',
