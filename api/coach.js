@@ -1,29 +1,54 @@
 ﻿const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 const RETRYABLE_STATUS = new Set([429, 500, 503]);
 
+function extractReply(payload) {
+  const candidate = (((payload || {}).candidates || [])[0] || {});
+  const content = candidate.content || {};
+  const reply = Array.isArray(content.parts)
+    ? content.parts.filter(part => typeof part.text === 'string').map(part => part.text).join('\n').trim()
+    : '';
+  return { reply, finishReason: candidate.finishReason || '' };
+}
+
+async function invokeGemini(apiKey, model, parts) {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts }],
+      generationConfig: { temperature: 0.8, topP: 0.95, maxOutputTokens: 1800 }
+    })
+  });
+  const payload = await response.json().catch(() => ({}));
+  return { response, payload };
+}
+
 async function callGemini(apiKey, parts) {
   let lastError = 'Gemini request failed.';
 
   for (const model of MODELS) {
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts }],
-          generationConfig: { temperature: 0.9, topP: 0.95, maxOutputTokens: 1400 }
-        })
-      });
-
-      const payload = await response.json().catch(() => ({}));
+      const { response, payload } = await invokeGemini(apiKey, model, parts);
       if (response.ok) {
-        const content = (((payload || {}).candidates || [])[0] || {}).content;
-        const reply = content && Array.isArray(content.parts)
-          ? content.parts.filter(part => typeof part.text === 'string').map(part => part.text).join('\n').trim()
-          : '';
-        if (reply) return reply;
-        lastError = 'No coach reply returned.';
-        break;
+        let { reply, finishReason } = extractReply(payload);
+        if (!reply) {
+          lastError = 'No coach reply returned.';
+          break;
+        }
+
+        if (finishReason === 'MAX_TOKENS') {
+          const continuationParts = [
+            ...parts,
+            { text: `The draft response was cut off. Continue from the exact unfinished point without repeating earlier text. Keep it concise and finish cleanly in at most 6 short paragraphs.\n\nDraft so far:\n${reply}` }
+          ];
+          const continuation = await invokeGemini(apiKey, model, continuationParts);
+          if (continuation.response.ok) {
+            const next = extractReply(continuation.payload).reply;
+            if (next) reply = `${reply}\n${next}`.trim();
+          }
+        }
+
+        return reply;
       }
 
       lastError = payload && payload.error && payload.error.message ? payload.error.message : `Gemini request failed on ${model}.`;
@@ -51,13 +76,14 @@ module.exports = async (req, res) => {
 
     const systemPrompt = [
       'You are an intense but supportive weight-cut and meal-choices coach inside a personal weight tracker app.',
-      'Write in a tactical, highly personalized style similar to a settlement note or trading desk update.',
+      'Write in a tactical, highly personalized style, but stay clear and compact.',
+      'Default to 3 to 5 short sections or paragraphs, not a huge wall of text.',
       'Ground every answer in the tracker data, recent entries, and any meal image details. If uncertain, say so clearly.',
       'Give practical advice about meal timing, water retention, step count, appetite control, and next-meal planning.',
       'Do not prescribe medications, do not give blood-pressure management instructions, and do not diagnose.',
       'Do not present exact next-day weight moves as guaranteed facts. Use cautious ranges and confidence language.',
       'If the uploaded food photo is ambiguous, say what you can and cannot tell from the image.',
-      'Detailed answers are welcome; the user likes specific, structured coaching.'
+      'Always finish the reply cleanly. Do not leave incomplete sentences.'
     ].join(' ');
 
     const trackerText = [
